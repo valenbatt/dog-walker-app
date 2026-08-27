@@ -74,6 +74,7 @@ export default function App() {
   };
 
   const isWalkCompleted = (clientId, dateStr) => finances.some(f => f.id === `walk_${clientId}_${dateStr}`);
+  
   const isExpired = (dateStr, daysLimit) => {
     if (!dateStr) return null;
     return Math.floor((new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24)) > daysLimit;
@@ -163,11 +164,11 @@ export default function App() {
               
               <div className="input-row">
                 <div style={{ width: '100%' }}>
-                  <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Búsqueda (Desde Bulnes 1579)</label>
+                  <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Búsqueda (Ej: 08:00)</label>
                   <input type="time" value={newClient.pickupTime} onChange={e => setNewClient({...newClient, pickupTime: e.target.value})} className="base-input" style={{ padding: '8px 12px' }} required/>
                 </div>
                 <div style={{ width: '100%' }}>
-                  <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Devolución</label>
+                  <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Devolución (Ej: 09:00)</label>
                   <input type="time" value={newClient.dropoffTime} onChange={e => setNewClient({...newClient, dropoffTime: e.target.value})} className="base-input" style={{ padding: '8px 12px' }} required/>
                 </div>
               </div>
@@ -288,14 +289,13 @@ export default function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px', marginBottom: '24px' }}>
                     <div>
                       <h2 style={{ margin: 0, fontSize: '1.2rem', color: '#38bdf8' }}>Hoja de Ruta: {selectedDayDetail.day} {selectedDayDetail.weekday}</h2>
-                      <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginTop: '4px' }}>Ruta ordenada cronológicamente desde Bulnes 1579</div>
+                      <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginTop: '4px' }}>Ruta ordenada cronológicamente por horario de búsqueda.</div>
                     </div>
                     <button onClick={() => setSelectedDayDetail(null)} style={{ background: 'transparent', border: 'none', color: '#a1a1aa', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
                   </div>
 
                   <div className="checklist-grid">
                     {turnos.map(turno => {
-                      // ORDENAMIENTO CRONOLÓGICO AUTOMÁTICO
                       const perrosTurno = clients
                         .filter(c => c.dias.includes(selectedDayDetail.weekday) && c.turno === turno)
                         .sort((a, b) => a.pickupTime.localeCompare(b.pickupTime));
