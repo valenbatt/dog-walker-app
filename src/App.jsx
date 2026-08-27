@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Estados persistentes
   const [clients, setClients] = useState(() => {
     const saved = localStorage.getItem('dogwalker_clients');
     return saved ? JSON.parse(saved) : [];
@@ -14,24 +13,20 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Estados de formularios y filtros
   const [newClient, setNewClient] = useState({ name: '', dog: '', breed: '', phone: '', plan: 'Lunes a Viernes', price: '', notes: '' });
   const [newTx, setNewTx] = useState({ type: 'ingreso', desc: '', amount: '', date: new Date().toISOString().split('T')[0] });
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Por defecto, selecciona el mes actual (Ej: "2026-08")
   const currentMonthStr = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
 
   useEffect(() => localStorage.setItem('dogwalker_clients', JSON.stringify(clients)), [clients]);
   useEffect(() => localStorage.setItem('dogwalker_finances', JSON.stringify(finances)), [finances]);
 
-  // Cálculos Globales (Dashboard)
   const totalIngresos = finances.filter(f => f.type === 'ingreso').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const totalGastos = finances.filter(f => f.type === 'gasto').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const balance = totalIngresos - totalGastos;
 
-  // Filtrado de Clientes
   const filteredClients = useMemo(() => {
     if (!searchTerm) return clients;
     const lower = searchTerm.toLowerCase();
@@ -42,7 +37,6 @@ export default function App() {
     );
   }, [clients, searchTerm]);
 
-  // Filtrado Mensual de Finanzas
   const monthlyFinances = useMemo(() => {
     return finances.filter(f => f.date.startsWith(selectedMonth));
   }, [finances, selectedMonth]);
@@ -77,7 +71,6 @@ export default function App() {
     const headers = ['Fecha', 'Concepto', 'Tipo', 'Monto (ARS)'];
     const rows = monthlyFinances.map(f => `${f.date},"${f.desc.replace(/"/g, '""')}",${f.type},${f.amount}`);
     
-    // Agregar fila de resumen
     rows.push(`"","","",""`);
     rows.push(`"RESUMEN DEL MES","Ingresos","+",${monthlyIngresos}`);
     rows.push(`"","Gastos","-",${monthlyGastos}`);
@@ -121,7 +114,7 @@ export default function App() {
             <input placeholder="Nombre del Perro" value={newClient.dog} onChange={e => setNewClient({...newClient, dog: e.target.value})} style={inputStyle} required />
             <input placeholder="Raza" value={newClient.breed} onChange={e => setNewClient({...newClient, breed: e.target.value})} style={inputStyle} />
             <input placeholder="Teléfono / WhatsApp" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} style={inputStyle} />
-            <input placeholder="Precio Mensual (ARS)" type="number" value={newClient.price} onChange={e => setNewClient({...newClient, price: e.target.value})} style={inputStyle} />
+            <input placeholder="Precio por Salida (ARS)" type="number" value={newClient.price} onChange={e => setNewClient({...newClient, price: e.target.value})} style={inputStyle} />
             <select value={newClient.plan} onChange={e => setNewClient({...newClient, plan: e.target.value})} style={inputStyle}>
               <option>Lunes a Viernes</option>
               <option>3x Semana</option>
@@ -151,7 +144,10 @@ export default function App() {
                   <div style={{ fontSize: '0.95rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div><strong>Dueño:</strong> {c.name}</div>
                     <div><strong>WhatsApp:</strong> {c.phone}</div>
-                    <div style={{ background: '#0f172a', padding: '8px', borderRadius: '6px' }}><strong>Plan:</strong> {c.plan} <br/><span style={{ color: '#4ade80' }}>${c.price?.toLocaleString()} ARS</span></div>
+                    <div style={{ background: '#0f172a', padding: '8px', borderRadius: '6px' }}>
+                      <strong>Frecuencia:</strong> {c.plan} <br/>
+                      <span style={{ color: '#4ade80' }}>${c.price?.toLocaleString()} ARS / salida</span>
+                    </div>
                     {c.notes && <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>📝 {c.notes}</div>}
                   </div>
                 </div>
@@ -170,8 +166,8 @@ export default function App() {
               <option value="ingreso">Ingreso (+)</option>
               <option value="gasto">Gasto (-)</option>
             </select>
-            <input placeholder="Concepto (Ej: Abono Lola, Pipetas)" value={newTx.desc} onChange={e => setNewTx({...newTx, desc: e.target.value})} style={inputStyle} required />
-            <input placeholder="Monto (ARS)" type="number" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} style={inputStyle} required />
+            <input placeholder="Concepto (Ej: Paseos Lola, Pipetas)" value={newTx.desc} onChange={e => setNewTx({...newTx, desc: e.target.value})} style={inputStyle} required />
+            <input placeholder="Monto Total (ARS)" type="number" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} style={inputStyle} required />
             <input type="date" value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} style={inputStyle} required />
             <button type="submit" style={btnStyle}>Registrar</button>
           </form>
@@ -228,7 +224,6 @@ export default function App() {
               </table>
             </div>
 
-            {/* Resumen del Mes */}
             <div style={{ marginTop: '24px', padding: '20px', background: '#0f172a', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', border: '1px solid #334155' }}>
               <div>
                 <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Ingresos del Mes</div>
@@ -253,7 +248,6 @@ export default function App() {
   );
 }
 
-// UI Components & Styles
 const StatCard = ({ title, value, color }) => (
   <div style={{ background: '#1e293b', padding: '24px', borderRadius: '16px', border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
     <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{title}</div>
