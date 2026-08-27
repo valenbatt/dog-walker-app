@@ -4,34 +4,35 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const [clients, setClients] = useState(() => {
-    const saved = localStorage.getItem('dogwalker_clients_v2');
+    const saved = localStorage.getItem('dogwalker_clients_v4');
     return saved ? JSON.parse(saved) : [];
   });
 
   const [finances, setFinances] = useState(() => {
-    const saved = localStorage.getItem('dogwalker_finances_v2');
+    const saved = localStorage.getItem('dogwalker_finances_v4');
     return saved ? JSON.parse(saved) : [];
   });
 
+  const todayStr = new Date().toISOString().split('T')[0];
   const [newClient, setNewClient] = useState({ 
     name: '', dog: '', phone: '', price: '', 
-    turno: 'Mañana (8:00)', photoUrl: '', notes: '', dias: [] 
+    address: '', pickupTime: '08:00', dropoffTime: '09:00',
+    turno: 'Mañana (8:00)', photoUrl: '', notes: '', dias: [],
+    pipeta: '', vacuna: ''
   });
   
-  const todayStr = new Date().toISOString().split('T')[0];
   const [newTx, setNewTx] = useState({ type: 'gasto', desc: '', amount: '', date: todayStr });
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Control de Mes y Día seleccionado
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [selectedDayDetail, setSelectedDayDetail] = useState(null); // Guardará { dateStr, weekday, day }
+  const [selectedMonth, setSelectedMonth] = useState(todayStr.slice(0, 7));
+  const [selectedDayDetail, setSelectedDayDetail] = useState(null); 
 
   const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   const turnos = ['Mañana (8:00)', 'Mediodía (11:30)', 'Tarde (16:00)'];
   const MAX_PERROS_TURNO = 5;
 
-  useEffect(() => localStorage.setItem('dogwalker_clients_v2', JSON.stringify(clients)), [clients]);
-  useEffect(() => localStorage.setItem('dogwalker_finances_v2', JSON.stringify(finances)), [finances]);
+  useEffect(() => localStorage.setItem('dogwalker_clients_v4', JSON.stringify(clients)), [clients]);
+  useEffect(() => localStorage.setItem('dogwalker_finances_v4', JSON.stringify(finances)), [finances]);
 
   const totalIngresos = finances.filter(f => f.type === 'ingreso').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const totalGastos = finances.filter(f => f.type === 'gasto').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -49,11 +50,8 @@ export default function App() {
 
   const handleDayToggle = (dia) => {
     const currentDays = [...newClient.dias];
-    if (currentDays.includes(dia)) {
-      setNewClient({ ...newClient, dias: currentDays.filter(d => d !== dia) });
-    } else {
-      setNewClient({ ...newClient, dias: [...currentDays, dia] });
-    }
+    if (currentDays.includes(dia)) setNewClient({ ...newClient, dias: currentDays.filter(d => d !== dia) });
+    else setNewClient({ ...newClient, dias: [...currentDays, dia] });
   };
 
   const handleAddClient = (e) => {
@@ -63,10 +61,9 @@ export default function App() {
       return;
     }
     setClients([...clients, { ...newClient, id: Date.now(), price: Number(newClient.price) || 0 }]);
-    setNewClient({ name: '', dog: '', phone: '', price: '', turno: 'Mañana (8:00)', photoUrl: '', notes: '', dias: [] });
+    setNewClient({ name: '', dog: '', phone: '', price: '', address: '', pickupTime: '08:00', dropoffTime: '09:00', turno: 'Mañana (8:00)', photoUrl: '', notes: '', dias: [], pipeta: '', vacuna: '' });
   };
 
-  // Check-in por FECHA EXACTA
   const handleWalkCheck = (client, isCompleted, dateStr) => {
     const autoWalkId = `walk_${client.id}_${dateStr}`;
     if (isCompleted) {
@@ -76,8 +73,10 @@ export default function App() {
     }
   };
 
-  const isWalkCompleted = (clientId, dateStr) => {
-    return finances.some(f => f.id === `walk_${clientId}_${dateStr}`);
+  const isWalkCompleted = (clientId, dateStr) => finances.some(f => f.id === `walk_${clientId}_${dateStr}`);
+  const isExpired = (dateStr, daysLimit) => {
+    if (!dateStr) return null;
+    return Math.floor((new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24)) > daysLimit;
   };
 
   const exportToCSV = () => {
@@ -87,268 +86,329 @@ export default function App() {
     rows.push(`"RESUMEN DEL MES";"Ingresos";"+";${monthlyIngresos}`);
     rows.push(`"";"Gastos";"-";${monthlyGastos}`);
     rows.push(`"";"TOTAL NETO";"";${monthlyBalance}`);
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(';') + "\n" + rows.join('\n');
     const link = document.createElement("a");
-    link.href = encodeURI(csvContent);
+    link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF" + headers.join(';') + "\n" + rows.join('\n'));
     link.download = `Balance_${selectedMonth}.csv`;
     link.click();
   };
 
-  // Lógica del Calendario Mensual
   const [yearStr, monthStr] = selectedMonth.split('-');
   const year = parseInt(yearStr);
   const month = parseInt(monthStr);
   const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Domingo
-  const startOffset = firstDayIndex === 0 ? 6 : firstDayIndex - 1; // Ajuste para que Lunes sea 0
+  const firstDayIndex = new Date(year, month - 1, 1).getDay(); 
+  const startOffset = firstDayIndex === 0 ? 6 : firstDayIndex - 1; 
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const mapDayToSpanish = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-  // CSS Inyectado para Responsividad Real
-  const responsiveCSS = `
-    .layout-grid { display: grid; grid-template-columns: 1fr; gap: 32px; align-items: start; }
-    @media(min-width: 1024px) { .layout-grid { grid-template-columns: 360px 1fr; } }
-    .header-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; width: 100%; justify-content: center; }
-    @media(min-width: 768px) { .header-nav { width: auto; margin-top: 0; justify-content: flex-end; } }
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
-    .day-header { text-align: center; font-size: 0.75rem; color: #a1a1aa; padding-bottom: 8px; font-weight: 600; text-transform: uppercase; }
-    .modal-content { width: 95%; max-width: 800px; max-height: 90vh; overflow-y: auto; }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
-    .checklist-grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+  const globalCSS = `
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+    body { background: #09090b; overflow-x: hidden; color: #fafafa; }
+    .app-container { min-height: 100vh; padding: 16px; width: 100%; max-width: 1200px; margin: 0 auto; background-image: radial-gradient(at top right, #1e1b4b, #09090b); }
+    .header-layout { display: flex; flex-direction: column; gap: 16px; align-items: center; margin-bottom: 32px; }
+    @media(min-width: 768px) { .header-layout { flex-direction: row; justify-content: space-between; } }
+    .nav-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px; border-radius: 16px; width: 100%; }
+    @media(min-width: 768px) { .nav-tabs { width: auto; } }
+    .main-grid { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
+    @media(min-width: 1024px) { .main-grid { grid-template-columns: 360px 1fr; } }
+    .input-row { display: flex; flex-direction: column; gap: 12px; }
+    @media(min-width: 480px) { .input-row { flex-direction: row; } }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+    @media(min-width: 768px) { .calendar-grid { gap: 8px; } }
+    .checklist-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
     @media(min-width: 768px) { .checklist-grid { grid-template-columns: repeat(3, 1fr); } }
+    .glass-card { background: rgba(24, 24, 27, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); width: 100%; }
+    .base-input { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); padding: 14px 16px; border-radius: 12px; color: #fafafa; font-size: 0.95rem; outline: none; width: 100%; transition: all 0.2s; }
+    .base-input:focus { border-color: #38bdf8; background: rgba(0,0,0,0.6); }
+    .btn-primary { background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%); color: #ffffff; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 1rem; width: 100%; box-shadow: 0 8px 20px -6px rgba(56, 189, 248, 0.4); transition: opacity 0.2s; }
+    .btn-primary:active { opacity: 0.8; }
   `;
 
   return (
-    <div style={{ fontFamily: 'Inter, system-ui, sans-serif', background: '#09090b', backgroundImage: 'radial-gradient(at top right, #1e1b4b, #09090b)', color: '#fafafa', minHeight: '100vh', padding: '20px', boxSizing: 'border-box' }}>
-      <style>{responsiveCSS}</style>
-      
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '1.8rem', margin: 0, fontWeight: '800', background: 'linear-gradient(to right, #38bdf8, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          🐾 Dog Walker Pro
-        </h1>
-        <nav className="header-nav" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px', borderRadius: '16px' }}>
-          {['dashboard', 'clientes', 'calendario', 'finanzas'].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={getTabStyle(activeTab === tab)}>{tab}</button>
-          ))}
-        </nav>
-      </header>
-
-      {activeTab === 'dashboard' && (
-        <div className="stats-grid">
-          <StatCard title="Total Perros Activos" value={clients.length} color="#fafafa" />
-          <StatCard title="Facturación Bruta" value={`$${totalIngresos.toLocaleString()}`} color="#10b981" />
-          <StatCard title="Gastos Operativos" value={`$${totalGastos.toLocaleString()}`} color="#ef4444" />
-          <StatCard title="Margen Neto" value={`$${balance.toLocaleString()}`} color={balance >= 0 ? '#38bdf8' : '#ef4444'} />
-        </div>
-      )}
-
-      {activeTab === 'clientes' && (
-        <div className="layout-grid">
-          <form onSubmit={handleAddClient} style={glassCard}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1.2rem' }}>Nueva Ficha</h3>
-            <div style={{display: 'flex', gap: '8px'}}>
-              <input placeholder="Dueño" value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} style={{...inputStyle, flex: 1}} required />
-              <input placeholder="Perro" value={newClient.dog} onChange={e => setNewClient({...newClient, dog: e.target.value})} style={{...inputStyle, flex: 1}} required />
-            </div>
-            <input placeholder="WhatsApp" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} style={inputStyle} />
-            <input placeholder="URL Foto (Opcional)" value={newClient.photoUrl} onChange={e => setNewClient({...newClient, photoUrl: e.target.value})} style={inputStyle} />
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input placeholder="Tarifa x Salida $" type="number" value={newClient.price} onChange={e => setNewClient({...newClient, price: e.target.value})} style={{...inputStyle, flex: 1}} required/>
-              <select value={newClient.turno} onChange={e => setNewClient({...newClient, turno: e.target.value})} style={{...inputStyle, flex: 1}}>
-                {turnos.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div style={{ marginTop: '8px' }}>
-              <div style={{ fontSize: '0.85rem', color: '#a1a1aa', marginBottom: '8px' }}>Días de paseo fijos:</div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {diasSemana.slice(0, 5).map(dia => (
-                  <button type="button" key={dia} onClick={() => handleDayToggle(dia)} style={{ ...badgeStyle, background: newClient.dias.includes(dia) ? '#38bdf8' : 'rgba(255,255,255,0.05)', color: newClient.dias.includes(dia) ? '#09090b' : '#a1a1aa' }}>
-                    {dia.substring(0, 2)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <textarea placeholder="Notas / Alergias..." value={newClient.notes} onChange={e => setNewClient({...newClient, notes: e.target.value})} style={{ ...inputStyle, minHeight: '60px', marginTop: '8px' }} />
-            <button type="submit" style={btnStylePrimary}>Registrar Cliente</button>
-          </form>
-
-          <div>
-            <input type="text" placeholder="🔍 Buscar perro..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ ...inputStyle, width: '100%', marginBottom: '20px' }}/>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-              {filteredClients.map(c => (
-                <div key={c.id} style={{...glassCard, padding: '16px', flexDirection: 'row', alignItems: 'center', gap: '12px'}}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', overflow: 'hidden', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {c.photoUrl ? <img src={c.photoUrl} alt={c.dog} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/> : <span style={{fontSize: '20px'}}>🐕</span>}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ margin: '0 0 2px 0', fontSize: '1.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.dog}</h4>
-                    <div style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>{c.name} | ${c.price}/día</div>
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
-                      {c.dias.map(d => <span key={d} style={{ fontSize: '0.65rem', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px' }}>{d.substring(0, 2)}</span>)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'calendario' && (
-        <div style={glassCard}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
-            <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Calendario Operativo</h2>
-            <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ ...inputStyle, width: 'auto', padding: '8px 12px' }} />
-          </div>
-
-          <div className="calendar-grid">
-            {diasSemana.map(dia => <div key={dia} className="day-header">{dia.substring(0, 3)}</div>)}
-            
-            {Array.from({ length: startOffset }).map((_, i) => (
-              <div key={`empty-${i}`} style={{ padding: '20px', background: 'transparent' }} />
+    <>
+      <style>{globalCSS}</style>
+      <div className="app-container">
+        <header className="header-layout">
+          <h1 style={{ fontSize: '2rem', fontWeight: '800', background: 'linear-gradient(to right, #38bdf8, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            🐾 Dog Walker Pro
+          </h1>
+          <nav className="nav-tabs">
+            {['dashboard', 'clientes', 'calendario', 'finanzas'].map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} style={getTabStyle(activeTab === tab)}>{tab}</button>
             ))}
-            
-            {daysArray.map(day => {
-              const dateObj = new Date(year, month - 1, day);
-              const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const weekdayStr = mapDayToSpanish[dateObj.getDay()];
-              const perrosDelDia = clients.filter(c => c.dias.includes(weekdayStr));
-              const isToday = dateStr === todayStr;
+          </nav>
+        </header>
 
-              return (
-                <div 
-                  key={day} 
-                  onClick={() => setSelectedDayDetail({ dateStr, weekday: weekdayStr, day })}
-                  style={{
-                    background: isToday ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.02)',
-                    border: isToday ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.05)',
-                    borderRadius: '12px', padding: '8px', cursor: 'pointer', minHeight: '80px',
-                    display: 'flex', flexDirection: 'column', transition: 'all 0.2s'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                  onMouseOut={(e) => e.currentTarget.style.background = isToday ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.02)'}
-                >
-                  <div style={{ fontSize: '0.85rem', color: isToday ? '#38bdf8' : '#fafafa', fontWeight: 'bold' }}>{day}</div>
-                  {perrosDelDia.length > 0 && (
-                    <div style={{ marginTop: 'auto', background: '#10b98120', color: '#10b981', fontSize: '0.75rem', padding: '4px', borderRadius: '4px', textAlign: 'center', fontWeight: 'bold' }}>
-                      {perrosDelDia.length} 🐾
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+        {activeTab === 'dashboard' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+            <StatCard title="Total Perros Activos" value={clients.length} color="#fafafa" />
+            <StatCard title="Facturación Bruta" value={`$${totalIngresos.toLocaleString()}`} color="#10b981" />
+            <StatCard title="Gastos Operativos" value={`$${totalGastos.toLocaleString()}`} color="#ef4444" />
+            <StatCard title="Margen Neto" value={`$${balance.toLocaleString()}`} color={balance >= 0 ? '#38bdf8' : '#ef4444'} />
           </div>
+        )}
 
-          {selectedDayDetail && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 50, padding: '16px' }}>
-              <div className="modal-content" style={glassCard}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px', marginBottom: '24px' }}>
-                  <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Checklist: {selectedDayDetail.day} {selectedDayDetail.weekday}</h2>
-                  <button onClick={() => setSelectedDayDetail(null)} style={{ background: 'transparent', border: 'none', color: '#a1a1aa', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
+        {activeTab === 'clientes' && (
+          <div className="main-grid">
+            <form onSubmit={handleAddClient} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Nueva Ficha</h3>
+              
+              <div className="input-row">
+                <input placeholder="Dueño" value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} className="base-input" required />
+                <input placeholder="Perro" value={newClient.dog} onChange={e => setNewClient({...newClient, dog: e.target.value})} className="base-input" required />
+              </div>
+              
+              <input placeholder="WhatsApp" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} className="base-input" />
+              <input placeholder="Dirección (Ej: Bulnes 1600)" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} className="base-input" required />
+              
+              <div className="input-row">
+                <div style={{ width: '100%' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Búsqueda (Desde Bulnes 1579)</label>
+                  <input type="time" value={newClient.pickupTime} onChange={e => setNewClient({...newClient, pickupTime: e.target.value})} className="base-input" style={{ padding: '8px 12px' }} required/>
                 </div>
+                <div style={{ width: '100%' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Devolución</label>
+                  <input type="time" value={newClient.dropoffTime} onChange={e => setNewClient({...newClient, dropoffTime: e.target.value})} className="base-input" style={{ padding: '8px 12px' }} required/>
+                </div>
+              </div>
 
-                <div className="checklist-grid">
-                  {turnos.map(turno => {
-                    const perrosTurno = clients.filter(c => c.dias.includes(selectedDayDetail.weekday) && c.turno === turno);
-                    const isOverloaded = perrosTurno.length > MAX_PERROS_TURNO;
-                    
-                    return (
-                      <div key={turno} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                          <span style={{ color: '#a78bfa', fontWeight: '600', fontSize: '0.9rem' }}>{turno}</span>
-                          <span style={{ background: isOverloaded ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: isOverloaded ? '#ef4444' : '#10b981', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                            {perrosTurno.length} / {MAX_PERROS_TURNO}
-                          </span>
-                        </div>
+              <div className="input-row">
+                <input placeholder="Tarifa x Salida $" type="number" value={newClient.price} onChange={e => setNewClient({...newClient, price: e.target.value})} className="base-input" required/>
+                <select value={newClient.turno} onChange={e => setNewClient({...newClient, turno: e.target.value})} className="base-input">
+                  {turnos.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ fontSize: '0.85rem', color: '#a1a1aa', marginBottom: '8px', fontWeight: '600' }}>Control Sanitario</div>
+                <div className="input-row">
+                  <div style={{ width: '100%' }}>
+                    <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Última Pipeta</label>
+                    <input type="date" value={newClient.pipeta} onChange={e => setNewClient({...newClient, pipeta: e.target.value})} className="base-input" style={{ padding: '8px 12px' }}/>
+                  </div>
+                  <div style={{ width: '100%' }}>
+                    <label style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Última Vacuna</label>
+                    <input type="date" value={newClient.vacuna} onChange={e => setNewClient({...newClient, vacuna: e.target.value})} className="base-input" style={{ padding: '8px 12px' }}/>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.85rem', color: '#a1a1aa', marginBottom: '8px' }}>Días de paseo fijos:</div>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {diasSemana.slice(0, 5).map(dia => (
+                    <button type="button" key={dia} onClick={() => handleDayToggle(dia)} style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', transition: 'all 0.2s', background: newClient.dias.includes(dia) ? '#38bdf8' : 'rgba(255,255,255,0.05)', color: newClient.dias.includes(dia) ? '#09090b' : '#a1a1aa' }}>
+                      {dia.substring(0, 2)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <textarea placeholder="Notas / Alergias..." value={newClient.notes} onChange={e => setNewClient({...newClient, notes: e.target.value})} className="base-input" style={{ minHeight: '60px', marginTop: '8px' }} />
+              <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>Registrar Cliente</button>
+            </form>
+
+            <div>
+              <input type="text" placeholder="🔍 Buscar perro..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="base-input" style={{ marginBottom: '24px' }}/>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                {filteredClients.map(c => {
+                  const pipetaVencida = isExpired(c.pipeta, 30);
+                  const vacunaVencida = isExpired(c.vacuna, 365);
+                  
+                  return (
+                    <div key={c.id} className="glass-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '16px', padding: '16px' }}>
+                      <div style={{ width: '60px', height: '60px', borderRadius: '50%', overflow: 'hidden', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{fontSize: '24px'}}>🐕</span>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '1.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.dog}</h4>
+                        <div style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>📍 {c.address}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>⏱️ {c.pickupTime} a {c.dropoffTime} | ${c.price}</div>
                         
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {perrosTurno.map(c => (
-                            <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}>
-                              <input 
-                                type="checkbox" 
-                                checked={isWalkCompleted(c.id, selectedDayDetail.dateStr)}
-                                onChange={(e) => handleWalkCheck(c, e.target.checked, selectedDayDetail.dateStr)}
-                                style={{ width: '18px', height: '18px', accentColor: '#38bdf8' }}
-                              />
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '500', textDecoration: isWalkCompleted(c.id, selectedDayDetail.dateStr) ? 'line-through' : 'none', color: isWalkCompleted(c.id, selectedDayDetail.dateStr) ? '#a1a1aa' : '#fafafa' }}>{c.dog}</span>
-                                <span style={{ fontSize: '0.7rem', color: '#10b981' }}>+${c.price}</span>
-                              </div>
-                            </label>
-                          ))}
-                          {perrosTurno.length === 0 && <div style={{ fontSize: '0.8rem', color: '#52525b', textAlign: 'center', padding: '12px' }}>Turno libre</div>}
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                           <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', color: pipetaVencida === true ? '#ef4444' : pipetaVencida === false ? '#10b981' : '#a1a1aa' }}>
+                             💧 Pipeta {pipetaVencida === true ? '🔴' : pipetaVencida === false ? '🟢' : '⚪'}
+                           </span>
+                           <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', color: vacunaVencida === true ? '#ef4444' : vacunaVencida === false ? '#10b981' : '#a1a1aa' }}>
+                             💉 Vacuna {vacunaVencida === true ? '🔴' : vacunaVencida === false ? '🟢' : '⚪'}
+                           </span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {activeTab === 'finanzas' && (
-        <div className="layout-grid">
-          <form onSubmit={e => { 
-            e.preventDefault(); 
-            setFinances([...finances, { ...newTx, id: Date.now(), amount: Number(newTx.amount), autoGenerated: false }]);
-            setNewTx({ type: 'gasto', desc: '', amount: '', date: todayStr });
-          }} style={glassCard}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1.2rem' }}>Carga Manual</h3>
-            <select value={newTx.type} onChange={e => setNewTx({...newTx, type: e.target.value})} style={inputStyle}>
-              <option value="gasto">Gasto Operativo (-)</option>
-              <option value="ingreso">Ingreso Extra (+)</option>
-            </select>
-            <input placeholder="Ej: Nafta, Snacks..." value={newTx.desc} onChange={e => setNewTx({...newTx, desc: e.target.value})} style={{...inputStyle, marginTop: '12px'}} required />
-            <input placeholder="Monto Total (ARS)" type="number" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} style={{...inputStyle, marginTop: '12px'}} required />
-            <input type="date" value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} style={{...inputStyle, marginTop: '12px', marginBottom: '16px'}} required />
-            <button type="submit" style={btnStylePrimary}>Registrar Movimiento</button>
-            <div style={{fontSize: '0.75rem', color: '#a1a1aa', marginTop: '12px', textAlign: 'center'}}>Los paseos se cobran desde el Calendario.</div>
-          </form>
-
-          <div style={{...glassCard, padding: '24px'}}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
-              <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ ...inputStyle, width: 'auto', padding: '8px 12px' }} />
-              <button onClick={exportToCSV} style={{ ...btnStylePrimary, background: '#10b981', color: '#022c22', width: 'auto', padding: '8px 16px' }}>⬇ Descargar CSV</button>
+        {activeTab === 'calendario' && (
+          <div className="glass-card">
+            <div className="header-layout" style={{ marginBottom: '24px' }}>
+              <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Calendario Operativo</h2>
+              <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="base-input" style={{ width: 'auto', padding: '8px 12px' }} />
             </div>
-            
-            <div style={{ overflowX: 'auto', maxHeight: '500px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem', minWidth: '400px' }}>
-                <thead style={{ position: 'sticky', top: 0, background: '#18181b' }}>
-                  <tr style={{ color: '#a1a1aa', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <th style={{ padding: '12px' }}>Fecha</th>
-                    <th style={{ padding: '12px' }}>Descripción</th>
-                    <th style={{ padding: '12px', textAlign: 'right' }}>Monto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyFinances.slice().reverse().map(f => (
-                    <tr key={f.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <td style={{ padding: '12px', color: '#a1a1aa', whiteSpace: 'nowrap' }}>{f.date.substring(5)}</td>
-                      <td style={{ padding: '12px' }}>
-                        {f.desc}
-                        {f.autoGenerated && <span style={{ marginLeft: '6px', fontSize: '0.65rem', background: '#38bdf820', color: '#38bdf8', padding: '2px 4px', borderRadius: '4px' }}>Auto</span>}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right', color: f.type === 'ingreso' ? '#34d399' : '#f87171', fontWeight: '600' }}>
-                        {f.type === 'ingreso' ? '+' : '-'}${Number(f.amount).toLocaleString()}
-                      </td>
+
+            <div className="calendar-grid">
+              {diasSemana.map(dia => <div key={dia} style={{ textAlign: 'center', fontSize: '0.75rem', color: '#a1a1aa', paddingBottom: '8px', fontWeight: '600' }}>{dia.substring(0, 3)}</div>)}
+              {Array.from({ length: startOffset }).map((_, i) => <div key={`empty-${i}`} />)}
+              
+              {daysArray.map(day => {
+                const dateObj = new Date(year, month - 1, day);
+                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const weekdayStr = mapDayToSpanish[dateObj.getDay()];
+                const perrosDelDia = clients.filter(c => c.dias.includes(weekdayStr));
+                const isToday = dateStr === todayStr;
+
+                return (
+                  <div 
+                    key={day} 
+                    onClick={() => setSelectedDayDetail({ dateStr, weekday: weekdayStr, day })}
+                    style={{
+                      background: isToday ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.02)',
+                      border: isToday ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.05)',
+                      borderRadius: '12px', padding: '8px', cursor: 'pointer', minHeight: '70px',
+                      display: 'flex', flexDirection: 'column'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.85rem', color: isToday ? '#38bdf8' : '#fafafa', fontWeight: 'bold' }}>{day}</div>
+                    {perrosDelDia.length > 0 && (
+                      <div style={{ marginTop: 'auto', background: '#10b98120', color: '#10b981', fontSize: '0.75rem', padding: '4px', borderRadius: '4px', textAlign: 'center', fontWeight: 'bold' }}>
+                        {perrosDelDia.length} 🐾
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {selectedDayDetail && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 50, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+                <div className="glass-card" style={{ width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px', marginBottom: '24px' }}>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: '1.2rem', color: '#38bdf8' }}>Hoja de Ruta: {selectedDayDetail.day} {selectedDayDetail.weekday}</h2>
+                      <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginTop: '4px' }}>Ruta ordenada cronológicamente desde Bulnes 1579</div>
+                    </div>
+                    <button onClick={() => setSelectedDayDetail(null)} style={{ background: 'transparent', border: 'none', color: '#a1a1aa', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
+                  </div>
+
+                  <div className="checklist-grid">
+                    {turnos.map(turno => {
+                      // ORDENAMIENTO CRONOLÓGICO AUTOMÁTICO
+                      const perrosTurno = clients
+                        .filter(c => c.dias.includes(selectedDayDetail.weekday) && c.turno === turno)
+                        .sort((a, b) => a.pickupTime.localeCompare(b.pickupTime));
+                      
+                      const isOverloaded = perrosTurno.length > MAX_PERROS_TURNO;
+                      
+                      return (
+                        <div key={turno} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <span style={{ color: '#a78bfa', fontWeight: '600', fontSize: '0.95rem' }}>{turno}</span>
+                            <span style={{ background: isOverloaded ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: isOverloaded ? '#ef4444' : '#10b981', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                              {perrosTurno.length} / {MAX_PERROS_TURNO}
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {perrosTurno.map((c, index) => (
+                              <label key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '12px', cursor: 'pointer', borderLeft: '3px solid #38bdf8' }}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={isWalkCompleted(c.id, selectedDayDetail.dateStr)}
+                                  onChange={(e) => handleWalkCheck(c, e.target.checked, selectedDayDetail.dateStr)}
+                                  style={{ width: '20px', height: '20px', accentColor: '#38bdf8', marginTop: '4px' }}
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: '600', textDecoration: isWalkCompleted(c.id, selectedDayDetail.dateStr) ? 'line-through' : 'none', color: isWalkCompleted(c.id, selectedDayDetail.dateStr) ? '#a1a1aa' : '#fafafa' }}>
+                                      {index + 1}. {c.dog}
+                                    </span>
+                                    <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: 'bold' }}>{c.pickupTime}</span>
+                                  </div>
+                                  <span style={{ fontSize: '0.75rem', color: '#a1a1aa', marginTop: '4px' }}>📍 {c.address}</span>
+                                  <span style={{ fontSize: '0.75rem', color: '#10b981' }}>Devolución: {c.dropoffTime} (+${c.price})</span>
+                                </div>
+                              </label>
+                            ))}
+                            {perrosTurno.length === 0 && <div style={{ fontSize: '0.85rem', color: '#52525b', textAlign: 'center', padding: '12px' }}>Turno libre</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'finanzas' && (
+          <div className="main-grid">
+            <form onSubmit={e => { 
+              e.preventDefault(); 
+              setFinances([...finances, { ...newTx, id: Date.now(), amount: Number(newTx.amount), autoGenerated: false }]);
+              setNewTx({ type: 'gasto', desc: '', amount: '', date: todayStr });
+            }} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '1.2rem' }}>Carga Manual</h3>
+              <select value={newTx.type} onChange={e => setNewTx({...newTx, type: e.target.value})} className="base-input">
+                <option value="gasto">Gasto Operativo (-)</option>
+                <option value="ingreso">Ingreso Extra (+)</option>
+              </select>
+              <input placeholder="Ej: Nafta, Snacks..." value={newTx.desc} onChange={e => setNewTx({...newTx, desc: e.target.value})} className="base-input" required />
+              <input placeholder="Monto Total (ARS)" type="number" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} className="base-input" required />
+              <input type="date" value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} className="base-input" required />
+              <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>Registrar Movimiento</button>
+            </form>
+
+            <div className="glass-card">
+              <div className="header-layout" style={{ marginBottom: '24px' }}>
+                <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="base-input" style={{ width: 'auto', padding: '8px 12px' }} />
+                <button onClick={exportToCSV} className="btn-primary" style={{ background: '#10b981', color: '#022c22', width: 'auto', padding: '10px 20px', boxShadow: 'none' }}>⬇ Descargar CSV</button>
+              </div>
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem', minWidth: '400px' }}>
+                  <thead style={{ background: 'rgba(0,0,0,0.3)' }}>
+                    <tr>
+                      <th style={{ padding: '16px 12px', color: '#a1a1aa' }}>Fecha</th>
+                      <th style={{ padding: '16px 12px', color: '#a1a1aa' }}>Descripción</th>
+                      <th style={{ padding: '16px 12px', textAlign: 'right', color: '#a1a1aa' }}>Monto</th>
                     </tr>
-                  ))}
-                  {monthlyFinances.length === 0 && <tr><td colSpan="3" style={{textAlign: 'center', padding: '20px', color: '#52525b'}}>Sin movimientos</td></tr>}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {monthlyFinances.slice().reverse().map(f => (
+                      <tr key={f.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '16px 12px', color: '#a1a1aa' }}>{f.date.substring(5)}</td>
+                        <td style={{ padding: '16px 12px' }}>
+                          {f.desc}
+                          {f.autoGenerated && <span style={{ marginLeft: '8px', fontSize: '0.65rem', background: '#38bdf820', color: '#38bdf8', padding: '2px 6px', borderRadius: '6px' }}>Auto</span>}
+                        </td>
+                        <td style={{ padding: '16px 12px', textAlign: 'right', color: f.type === 'ingreso' ? '#34d399' : '#ef4444', fontWeight: '600' }}>
+                          {f.type === 'ingreso' ? '+' : '-'}${Number(f.amount).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
-const glassCard = { background: 'rgba(24, 24, 27, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.05)', padding: '24px', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column' };
-const StatCard = ({ title, value, color }) => ( <div style={{...glassCard, padding: '20px'}}> <div style={{ color: '#a1a1aa', fontSize: '0.85rem', fontWeight: '500', marginBottom: '8px' }}>{title}</div> <div style={{ fontSize: '2rem', fontWeight: '800', color: color, letterSpacing: '-1px' }}>{value}</div> </div> );
-const inputStyle = { background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '12px 14px', borderRadius: '12px', color: '#fafafa', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box', transition: 'border 0.2s ease' };
-const badgeStyle = { border: '1px solid rgba(255,255,255,0.1)', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600', transition: 'all 0.2s' };
-const btnStylePrimary = { background: 'linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)', color: '#ffffff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', fontSize: '0.95rem', width: '100%', boxShadow: '0 8px 20px -6px rgba(56, 189, 248, 0.4)', transition: 'opacity 0.2s', marginTop: '16px' };
-const getTabStyle = (isActive) => ({ background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent', color: isActive ? '#fff' : '#a1a1aa', border: isActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: '600', textTransform: 'capitalize', transition: 'all 0.2s', fontSize: '0.9rem' });
+const StatCard = ({ title, value, color }) => (
+  <div className="glass-card" style={{ padding: '24px' }}>
+    <div style={{ color: '#a1a1aa', fontSize: '0.9rem', fontWeight: '500', marginBottom: '8px' }}>{title}</div>
+    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: color, letterSpacing: '-1px' }}>{value}</div>
+  </div>
+);
+
+const getTabStyle = (isActive) => ({
+  background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent', color: isActive ? '#fff' : '#a1a1aa',
+  border: 'none', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer',
+  fontWeight: '600', textTransform: 'capitalize', transition: 'all 0.2s', fontSize: '0.95rem'
+});
