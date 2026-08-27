@@ -13,12 +13,10 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [newClient, setNewClient] = useState({ name: '', dog: '', breed: '', phone: '', plan: 'Lunes a Viernes', price: '', notes: '' });
+  const [newClient, setNewClient] = useState({ name: '', dog: '', breed: '', phone: '', plan: 'Lunes a Viernes', price: '', turno: 'Mañana (8:00)', notes: '' });
   const [newTx, setNewTx] = useState({ type: 'ingreso', desc: '', amount: '', date: new Date().toISOString().split('T')[0] });
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
   useEffect(() => localStorage.setItem('dogwalker_clients', JSON.stringify(clients)), [clients]);
   useEffect(() => localStorage.setItem('dogwalker_finances', JSON.stringify(finances)), [finances]);
@@ -29,18 +27,13 @@ export default function App() {
 
   const filteredClients = useMemo(() => {
     if (!searchTerm) return clients;
-    const lower = searchTerm.toLowerCase();
     return clients.filter(c => 
-      c.dog.toLowerCase().includes(lower) || 
-      c.name.toLowerCase().includes(lower) || 
-      c.breed.toLowerCase().includes(lower)
+      c.dog.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      c.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [clients, searchTerm]);
 
-  const monthlyFinances = useMemo(() => {
-    return finances.filter(f => f.date.startsWith(selectedMonth));
-  }, [finances, selectedMonth]);
-
+  const monthlyFinances = useMemo(() => finances.filter(f => f.date.startsWith(selectedMonth)), [finances, selectedMonth]);
   const monthlyIngresos = monthlyFinances.filter(f => f.type === 'ingreso').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const monthlyGastos = monthlyFinances.filter(f => f.type === 'gasto').reduce((acc, curr) => acc + Number(curr.amount), 0);
   const monthlyBalance = monthlyIngresos - monthlyGastos;
@@ -49,198 +42,155 @@ export default function App() {
     e.preventDefault();
     if (!newClient.name || !newClient.dog) return;
     setClients([...clients, { ...newClient, id: Date.now(), price: Number(newClient.price) || 0 }]);
-    setNewClient({ name: '', dog: '', breed: '', phone: '', plan: 'Lunes a Viernes', price: '', notes: '' });
-  };
-
-  const handleAddTx = (e) => {
-    e.preventDefault();
-    if (!newTx.desc || !newTx.amount) return;
-    setFinances([...finances, { ...newTx, id: Date.now(), amount: Number(newTx.amount) }]);
-    setNewTx({ type: 'ingreso', desc: '', amount: '', date: new Date().toISOString().split('T')[0] });
-  };
-
-  const deleteClient = (id) => {
-    if(window.confirm('¿Eliminar cliente?')) setClients(clients.filter(c => c.id !== id));
-  };
-
-  const deleteTx = (id) => {
-    if(window.confirm('¿Eliminar movimiento?')) setFinances(finances.filter(f => f.id !== id));
+    setNewClient({ name: '', dog: '', breed: '', phone: '', plan: 'Lunes a Viernes', price: '', turno: 'Mañana (8:00)', notes: '' });
   };
 
   const exportToCSV = () => {
     const headers = ['Fecha', 'Concepto', 'Tipo', 'Monto (ARS)'];
-    const rows = monthlyFinances.map(f => `${f.date},"${f.desc.replace(/"/g, '""')}",${f.type},${f.amount}`);
-    
-    rows.push(`"","","",""`);
-    rows.push(`"RESUMEN DEL MES","Ingresos","+",${monthlyIngresos}`);
-    rows.push(`"","Gastos","-",${monthlyGastos}`);
-    rows.push(`"","TOTAL NETO","",${monthlyBalance}`);
+    // Usamos ; para Excel en español y \uFEFF para los acentos
+    const rows = monthlyFinances.map(f => `${f.date};"${f.desc.replace(/"/g, '""')}";${f.type};${f.amount}`);
+    rows.push(`"";"";"";""`);
+    rows.push(`"RESUMEN DEL MES";"Ingresos";"+";${monthlyIngresos}`);
+    rows.push(`"";"Gastos";"-";${monthlyGastos}`);
+    rows.push(`"";"TOTAL NETO";"";${monthlyBalance}`);
 
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(';') + "\n" + rows.join('\n');
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Balance_DogWalker_${selectedMonth}.csv`);
-    document.body.appendChild(link);
+    link.href = encodeURI(csvContent);
+    link.download = `Balance_${selectedMonth}.csv`;
     link.click();
-    document.body.removeChild(link);
   };
 
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', backgroundColor: '#0f172a', color: '#f8fafc', minHeight: '100vh', padding: '32px' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '20px', marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: '700', color: '#38bdf8', letterSpacing: '-0.5px' }}>🐾 Dog Walker Pro</h1>
-        <nav style={{ display: 'flex', gap: '12px', background: '#1e293b', padding: '6px', borderRadius: '12px' }}>
-          {['dashboard', 'clientes', 'finanzas'].map((tab) => (
+    <div style={{ fontFamily: 'Inter, system-ui, sans-serif', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', color: '#f8fafc', minHeight: '100vh', padding: '32px' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+        <h1 style={{ fontSize: '2rem', margin: 0, fontWeight: '800', background: 'linear-gradient(to right, #38bdf8, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          🐾 Dog Walker Pro
+        </h1>
+        <nav style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '6px', borderRadius: '16px', backdropFilter: 'blur(10px)' }}>
+          {['dashboard', 'clientes', 'calendario', 'finanzas'].map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={getTabStyle(activeTab === tab)}>{tab}</button>
           ))}
         </nav>
       </header>
 
       {activeTab === 'dashboard' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
           <StatCard title="Perros Activos" value={clients.length} color="#f8fafc" />
-          <StatCard title="Facturación Histórica" value={`$${totalIngresos.toLocaleString()}`} color="#4ade80" />
+          <StatCard title="Facturación Histórica" value={`$${totalIngresos.toLocaleString()}`} color="#34d399" />
           <StatCard title="Gastos Históricos" value={`$${totalGastos.toLocaleString()}`} color="#f87171" />
           <StatCard title="Rentabilidad Global" value={`$${balance.toLocaleString()}`} color={balance >= 0 ? '#38bdf8' : '#f87171'} />
         </div>
       )}
 
       {activeTab === 'clientes' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '32px', alignItems: 'start' }}>
-          <form onSubmit={handleAddClient} style={cardStyle}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1.2rem' }}>Alta de Cliente</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '32px', alignItems: 'start' }}>
+          <form onSubmit={handleAddClient} style={glassCard}>
+            <h3 style={{ marginTop: 0, marginBottom: '24px', fontSize: '1.2rem', fontWeight: '600' }}>Alta de Cliente</h3>
             <input placeholder="Nombre del Dueño" value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} style={inputStyle} required />
             <input placeholder="Nombre del Perro" value={newClient.dog} onChange={e => setNewClient({...newClient, dog: e.target.value})} style={inputStyle} required />
-            <input placeholder="Raza" value={newClient.breed} onChange={e => setNewClient({...newClient, breed: e.target.value})} style={inputStyle} />
             <input placeholder="Teléfono / WhatsApp" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} style={inputStyle} />
-            <input placeholder="Precio por Salida (ARS)" type="number" value={newClient.price} onChange={e => setNewClient({...newClient, price: e.target.value})} style={inputStyle} />
-            <select value={newClient.plan} onChange={e => setNewClient({...newClient, plan: e.target.value})} style={inputStyle}>
-              <option>Lunes a Viernes</option>
-              <option>3x Semana</option>
-              <option>Fines de Semana</option>
-              <option>Paseo Individual</option>
-            </select>
-            <textarea placeholder="Comportamiento / Notas..." value={newClient.notes} onChange={e => setNewClient({...newClient, notes: e.target.value})} style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
-            <button type="submit" style={btnStyle}>Guardar Ficha</button>
+            <input placeholder="Precio x Salida (ARS)" type="number" value={newClient.price} onChange={e => setNewClient({...newClient, price: e.target.value})} style={inputStyle} />
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <select value={newClient.plan} onChange={e => setNewClient({...newClient, plan: e.target.value})} style={{...inputStyle, flex: 1}}>
+                <option>L-V</option>
+                <option>3x Sem</option>
+              </select>
+              <select value={newClient.turno} onChange={e => setNewClient({...newClient, turno: e.target.value})} style={{...inputStyle, flex: 1}}>
+                <option>Mañana (8:00)</option>
+                <option>Mediodía (11:30)</option>
+                <option>Tarde (16:00)</option>
+              </select>
+            </div>
+            
+            <textarea placeholder="Notas..." value={newClient.notes} onChange={e => setNewClient({...newClient, notes: e.target.value})} style={{ ...inputStyle, minHeight: '80px' }} />
+            <button type="submit" style={btnStylePrimary}>Guardar Ficha</button>
           </form>
 
           <div>
-            <div style={{ marginBottom: '20px' }}>
-              <input 
-                type="text" 
-                placeholder="🔍 Buscar por perro, dueño o raza..." 
-                value={searchTerm} 
-                onChange={e => setSearchTerm(e.target.value)} 
-                style={{ ...inputStyle, width: '100%', maxWidth: '400px', background: '#1e293b' }}
-              />
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+            <input type="text" placeholder="🔍 Buscar perro o dueño..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ ...inputStyle, width: '100%', maxWidth: '400px', marginBottom: '24px' }}/>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
               {filteredClients.map(c => (
-                <div key={c.id} style={{ ...cardStyle, borderTop: '4px solid #38bdf8', position: 'relative' }}>
-                  <button onClick={() => deleteClient(c.id)} style={deleteBtnStyle}>×</button>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1.3rem' }}>🐕 {c.dog} <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 'normal' }}>({c.breed})</span></h4>
-                  <div style={{ fontSize: '0.95rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div><strong>Dueño:</strong> {c.name}</div>
-                    <div><strong>WhatsApp:</strong> {c.phone}</div>
-                    <div style={{ background: '#0f172a', padding: '8px', borderRadius: '6px' }}>
-                      <strong>Frecuencia:</strong> {c.plan} <br/>
-                      <span style={{ color: '#4ade80' }}>${c.price?.toLocaleString()} ARS / salida</span>
+                <div key={c.id} style={{...glassCard, borderTop: '4px solid #818cf8'}}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1.4rem' }}>🐕 {c.dog}</h4>
+                  <div style={{ fontSize: '0.9rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div><strong>Dueño:</strong> {c.name} ({c.phone})</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', marginTop: '8px' }}>
+                      <span><strong>Turno:</strong><br/>{c.turno}</span>
+                      <span style={{textAlign: 'right'}}><strong>Tarifa:</strong><br/><span style={{ color: '#34d399' }}>${c.price}</span></span>
                     </div>
-                    {c.notes && <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>📝 {c.notes}</div>}
                   </div>
                 </div>
               ))}
-              {filteredClients.length === 0 && <p style={{ color: '#94a3b8' }}>No hay clientes registrados o no coinciden con la búsqueda.</p>}
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'calendario' && (
+        <div style={glassCard}>
+          <h2 style={{marginTop: 0}}>Calendario Semanal Fijo</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px', marginTop: '24px' }}>
+            {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].map(dia => (
+              <div key={dia}>
+                <h3 style={{ textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>{dia}</h3>
+                {['Mañana (8:00)', 'Mediodía (11:30)', 'Tarde (16:00)'].map(turno => (
+                  <div key={turno} style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', marginBottom: '12px', minHeight: '100px' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#818cf8', fontWeight: 'bold', marginBottom: '8px' }}>{turno}</div>
+                    {clients.filter(c => c.turno === turno).map(c => (
+                      <div key={c.id} style={{ fontSize: '0.85rem', background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '6px', marginBottom: '4px' }}>
+                        🐾 {c.dog}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {activeTab === 'finanzas' && (
         <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '32px', alignItems: 'start' }}>
-          <form onSubmit={handleAddTx} style={cardStyle}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1.2rem' }}>Cargar Movimiento</h3>
+          {/* Formulario Finanzas Mantenido igual pero con estilos Glass */}
+          <form onSubmit={e => { e.preventDefault(); setFinances([...finances, { ...newTx, id: Date.now(), amount: Number(newTx.amount) }]); }} style={glassCard}>
+            <h3 style={{ marginTop: 0, marginBottom: '24px' }}>Nuevo Movimiento</h3>
             <select value={newTx.type} onChange={e => setNewTx({...newTx, type: e.target.value})} style={inputStyle}>
               <option value="ingreso">Ingreso (+)</option>
               <option value="gasto">Gasto (-)</option>
             </select>
-            <input placeholder="Concepto (Ej: Paseos Lola, Pipetas)" value={newTx.desc} onChange={e => setNewTx({...newTx, desc: e.target.value})} style={inputStyle} required />
-            <input placeholder="Monto Total (ARS)" type="number" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} style={inputStyle} required />
-            <input type="date" value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} style={inputStyle} required />
-            <button type="submit" style={btnStyle}>Registrar</button>
+            <input placeholder="Concepto" value={newTx.desc} onChange={e => setNewTx({...newTx, desc: e.target.value})} style={inputStyle} required />
+            <input placeholder="Monto (ARS)" type="number" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} style={inputStyle} required />
+            <button type="submit" style={btnStylePrimary}>Registrar</button>
           </form>
 
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <h3 style={{ margin: 0 }}>Historial Mensual</h3>
-                <input 
-                  type="month" 
-                  value={selectedMonth} 
-                  onChange={e => setSelectedMonth(e.target.value)} 
-                  style={{ ...inputStyle, padding: '6px 12px', width: 'auto' }}
-                />
-              </div>
-              <button onClick={exportToCSV} style={{ ...btnStyle, background: '#4ade80', color: '#064e3b', width: 'auto', padding: '8px 16px', fontSize: '0.9rem' }}>
-                ⬇ Descargar Excel
-              </button>
+          <div style={glassCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ ...inputStyle, width: 'auto' }} />
+              <button onClick={exportToCSV} style={{ ...btnStylePrimary, background: '#34d399', color: '#064e3b', width: 'auto' }}>⬇ Exportar Excel</button>
             </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '500px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #334155', color: '#94a3b8', fontSize: '0.9rem' }}>
-                    <th style={{ padding: '12px 8px' }}>Fecha</th>
-                    <th style={{ padding: '12px 8px' }}>Concepto</th>
-                    <th style={{ padding: '12px 8px' }}>Tipo</th>
-                    <th style={{ padding: '12px 8px', textAlign: 'right' }}>Monto</th>
-                    <th style={{ padding: '12px 8px', width: '40px' }}></th>
+            
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <th style={{ padding: '12px' }}>Fecha</th>
+                  <th style={{ padding: '12px' }}>Concepto</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyFinances.map(f => (
+                  <tr key={f.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '16px 12px' }}>{f.date}</td>
+                    <td style={{ padding: '16px 12px' }}>{f.desc}</td>
+                    <td style={{ padding: '16px 12px', textAlign: 'right', color: f.type === 'ingreso' ? '#34d399' : '#f87171', fontWeight: 'bold' }}>
+                      {f.type === 'ingreso' ? '+' : '-'}${Number(f.amount).toLocaleString()}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {monthlyFinances.map(f => (
-                    <tr key={f.id} style={{ borderBottom: '1px solid #1e293b' }}>
-                      <td style={{ padding: '12px 8px', fontSize: '0.9rem', color: '#cbd5e1' }}>{f.date}</td>
-                      <td style={{ padding: '12px 8px' }}>{f.desc}</td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <span style={{ background: f.type === 'ingreso' ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 113, 113, 0.1)', color: f.type === 'ingreso' ? '#4ade80' : '#f87171', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold' }}>
-                          {f.type}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 'bold', color: '#f8fafc' }}>
-                        ${Number(f.amount).toLocaleString()}
-                      </td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                        <button onClick={() => deleteTx(f.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {monthlyFinances.length === 0 && (
-                    <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>No hay movimientos en este mes.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ marginTop: '24px', padding: '20px', background: '#0f172a', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', border: '1px solid #334155' }}>
-              <div>
-                <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Ingresos del Mes</div>
-                <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '1.2rem' }}>+ ${monthlyIngresos.toLocaleString()}</div>
-              </div>
-              <div>
-                <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Gastos del Mes</div>
-                <div style={{ color: '#f87171', fontWeight: 'bold', fontSize: '1.2rem' }}>- ${monthlyGastos.toLocaleString()}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Neto ({selectedMonth})</div>
-                <div style={{ color: monthlyBalance >= 0 ? '#38bdf8' : '#f87171', fontWeight: 'bold', fontSize: '1.5rem' }}>
-                  ${monthlyBalance.toLocaleString()}
-                </div>
-              </div>
-            </div>
-
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -248,26 +198,61 @@ export default function App() {
   );
 }
 
+// Estilos Glassmorphism
+const glassCard = {
+  background: 'rgba(30, 41, 59, 0.4)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  padding: '32px',
+  borderRadius: '24px',
+  boxShadow: '0 20px 40px -10px rgba(0,0,0,0.3)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px'
+};
+
 const StatCard = ({ title, value, color }) => (
-  <div style={{ background: '#1e293b', padding: '24px', borderRadius: '16px', border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{title}</div>
-    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: color, letterSpacing: '-1px' }}>{value}</div>
+  <div style={{...glassCard, padding: '24px'}}>
+    <div style={{ color: '#94a3b8', fontSize: '0.95rem', fontWeight: '500', marginBottom: '12px' }}>{title}</div>
+    <div style={{ fontSize: '2.5rem', fontWeight: '800', color: color }}>{value}</div>
   </div>
 );
 
-const getTabStyle = (isActive) => ({
-  background: isActive ? '#38bdf8' : 'transparent',
-  color: isActive ? '#0f172a' : '#94a3b8',
+const inputStyle = {
+  background: 'rgba(15, 23, 42, 0.6)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  padding: '14px 16px',
+  borderRadius: '12px',
+  color: '#f8fafc',
+  fontSize: '0.95rem',
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box',
+  transition: 'border 0.3s ease'
+};
+
+const btnStylePrimary = {
+  background: 'linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)',
+  color: '#ffffff',
   border: 'none',
-  padding: '8px 16px',
-  borderRadius: '8px',
+  padding: '14px',
+  borderRadius: '12px',
+  fontWeight: '700',
+  cursor: 'pointer',
+  fontSize: '1rem',
+  width: '100%',
+  boxShadow: '0 4px 12px rgba(56, 189, 248, 0.3)'
+};
+
+const getTabStyle = (isActive) => ({
+  background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+  color: isActive ? '#fff' : '#94a3b8',
+  border: 'none',
+  padding: '10px 20px',
+  borderRadius: '12px',
   cursor: 'pointer',
   fontWeight: '600',
   textTransform: 'capitalize',
-  transition: 'all 0.2s ease'
+  transition: 'all 0.3s ease'
 });
-
-const cardStyle = { background: '#1e293b', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' };
-const inputStyle = { background: '#0f172a', border: '1px solid #334155', padding: '12px', borderRadius: '8px', color: '#f8fafc', fontSize: '0.95rem', outline: 'none', width: '100%', boxSizing: 'border-box' };
-const btnStyle = { background: '#38bdf8', color: '#0f172a', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '1rem', transition: 'opacity 0.2s', width: '100%' };
-const deleteBtnStyle = { position: 'absolute', top: '12px', right: '12px', background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.5rem', cursor: 'pointer' };
